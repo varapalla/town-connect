@@ -1,8 +1,159 @@
 "use client";
+
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
-type Place={id:string;name:string;address:string;rating:number|null;reviewCount:number;phone:string|null;website:string|null;mapsUrl:string|null;type:string|null;location:any;photos:{name:string}[]};
-const suggestions=["Find an AC technician near me","Find a wedding photographer under ₹20,000","Best bakery near me","Find a plumber open now"];
-export default function Home(){const[query,setQuery]=useState("");const[places,setPlaces]=useState<Place[]>([]);const[loading,setLoading]=useState(false);const[error,setError]=useState("");const[location,setLocation]=useState<{lat:number;lng:number}|null>(null);useEffect(()=>{navigator.geolocation?.getCurrentPosition(p=>setLocation({lat:p.coords.latitude,lng:p.coords.longitude}),()=>{}, {enableHighAccuracy:false,timeout:6000})},[]);async function search(value=query){const q=value.trim();if(!q)return;setQuery(q);setLoading(true);setError("");try{const p=new URLSearchParams({q});if(location){p.set("lat",String(location.lat));p.set("lng",String(location.lng))}const r=await fetch(`/api/search?${p}`);const d=await r.json();if(!r.ok)throw new Error(d.error||"Search failed");setPlaces(d.places||[])}catch(e){setError(e instanceof Error?e.message:"Search failed")}finally{setLoading(false)}}function submit(e:FormEvent){e.preventDefault();search()}
-return <main className="shell"><aside className="sidebar"><div className="brand"><span className="brand-mark">T</span><div><strong>TownConnect</strong><small>Ask your town anything</small></div></div><div className="town">📍 <span>Town XYZ</span></div><nav>{["Dashboard","Businesses","Leads","Map","Ask the Town","Town Intelligence","MCP Tools"].map(x=><button key={x} className={x==="Ask the Town"?"nav active":"nav"}>{x}</button>)}</nav></aside><section className="content"><header className="topbar"><div><span className="eyebrow">TOWNCONNECT V1</span><h1>Ask your town anything.</h1><p>Discover real local businesses using Google Places.</p></div><div className="status"><span className="dot"/> Google Places connected</div></header><section className="hero-card"><span className="pill">✦ GOOGLE LOCAL SEARCH</span><h2>What do you need<br/>in your town?</h2><p>Search real local businesses and open their Google-powered profiles.</p><form onSubmit={submit} className="search-box"><span>⌕</span><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="e.g. Dark Purple Chocolate Studio Proddatur"/><button disabled={loading}>{loading?"Searching…":"Search"} →</button></form><div className="chips">{suggestions.map(s=><button key={s} onClick={()=>search(s)}>{s}</button>)}</div></section><section className="section-head"><div><span className="eyebrow">LIVE RESULTS</span><h2>{query?`Results for “${query}”`:"Explore local businesses"}</h2></div><span className="count">{places.length?`${places.length} businesses`:"Google Places"}</span></section>{error&&<div className="error">⚠ {error}<small>Check your Google API key, Places API (New), billing and restrictions.</small></div>}{!loading&&!error&&!places.length&&<div className="empty"><h3>Search your town</h3><p>Try “Dark Purple Chocolate Studio Proddatur”</p></div>}<div className="grid">{places.map(p=><article className="card" key={p.id}><div className="card-photo">{p.photos?.[0]?<img src={`/api/photo?name=${encodeURIComponent(p.photos[0].name)}&width=800`} alt=""/>:<div className="business-icon">⌂</div>}</div><h3>{p.name}</h3><p className="type">{pretty(p.type)}</p><p className="address">⌖ {p.address}</p><div className="rating">★ <b>{p.rating??"—"}</b> <span>({p.reviewCount||0} reviews)</span></div><div className="actions">{p.phone&&<a href={`tel:${p.phone}`}>Call</a>}{p.mapsUrl&&<a href={p.mapsUrl} target="_blank" rel="noreferrer">Directions</a>}<Link href={`/business/${encodeURIComponent(p.id)}`}>Details</Link></div></article>)}</div>{places.length>0&&<div className="google-note">Results and photos provided by Google Places. Google attribution and Places terms apply.</div>}</section></main>}
-function pretty(v:string|null){return v?v.replaceAll("_"," ").replace(/\b\w/g,c=>c.toUpperCase()):"Local business"}
+
+type Photo = { name: string };
+type Place = {
+  id: string;
+  name: string;
+  address: string;
+  rating: number | null;
+  reviewCount: number;
+  phone: string | null;
+  website: string | null;
+  mapsUrl: string | null;
+  type: string | null;
+  location: { latitude: number; longitude: number } | null;
+  photos: Photo[];
+  openingHours?: { openNow?: boolean } | null;
+  matchReasons?: string[];
+};
+type Intent = {
+  intent: string;
+  category: string;
+  locationQuery: string;
+  budgetMax: number | null;
+  currency: string;
+  dateQuery: string | null;
+  openNow: boolean;
+  searchQuery: string;
+  keywords: string[];
+};
+
+const suggestions = [
+  "Find an AC technician near me",
+  "Find a wedding photographer under ₹20,000",
+  "Find a birthday cake under ₹1,000 near me",
+  "Restaurants open now near me",
+];
+
+export default function Home() {
+  const [query, setQuery] = useState("");
+  const [places, setPlaces] = useState<Place[]>([]);
+  const [intent, setIntent] = useState<Intent | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+
+  useEffect(() => {
+    navigator.geolocation?.getCurrentPosition(
+      (p) => setLocation({ latitude: p.coords.latitude, longitude: p.coords.longitude }),
+      () => {},
+      { enableHighAccuracy: false, timeout: 6000 },
+    );
+  }, []);
+
+  async function search(value = query) {
+    const message = value.trim();
+    if (!message) return;
+    setQuery(message);
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch("/api/ai/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message, location }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "AI search failed");
+      setIntent(data.intent);
+      setPlaces(data.places || []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "AI search failed");
+      setPlaces([]);
+      setIntent(null);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    search();
+  }
+
+  return (
+    <main className="shell">
+      <aside className="sidebar">
+        <div className="brand">
+          <span className="brand-mark">T</span>
+          <div><strong>TownConnect</strong><small>Ask your town anything</small></div>
+        </div>
+        <div className="town">📍 <span>Town XYZ</span></div>
+        <nav>
+          {["Dashboard", "Businesses", "Leads", "Map", "Ask the Town", "Town Intelligence", "MCP Tools"].map((x) => (
+            <button key={x} className={x === "Ask the Town" ? "nav active" : "nav"}>{x}</button>
+          ))}
+        </nav>
+        <div className="phase-card"><span>PHASE 2</span><strong>AI local discovery</strong><small>Gemini understands the request. Google Places supplies the businesses.</small></div>
+      </aside>
+
+      <section className="content">
+        <header className="topbar">
+          <div><span className="eyebrow">TOWNCONNECT V2</span><h1>Ask your town anything.</h1><p>Describe what you need. AI understands it, then Google finds real local businesses.</p></div>
+          <div className="status"><span className="dot"/> Google Places + Gemini</div>
+        </header>
+
+        <section className="hero-card">
+          <span className="pill">✦ AI LOCAL SEARCH</span>
+          <h2>Tell us what you need<br/>in your town.</h2>
+          <p>No filters required. Tell TownConnect naturally — service, product, budget, date or availability.</p>
+          <form onSubmit={submit} className="search-box">
+            <span>⌕</span>
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="e.g. Find a birthday cake under ₹1,000 near me" />
+            <button disabled={loading}>{loading ? "Understanding…" : "Ask TownConnect"} →</button>
+          </form>
+          <div className="chips">{suggestions.map((s) => <button key={s} onClick={() => search(s)}>{s}</button>)}</div>
+        </section>
+
+        {intent && (
+          <section className="intent-card">
+            <div><span className="eyebrow">UNDERSTOOD</span><h2>Here's what TownConnect heard</h2></div>
+            <div className="intent-grid">
+              <div><small>Need</small><strong>{intent.category}</strong></div>
+              <div><small>Location</small><strong>{intent.locationQuery}</strong></div>
+              <div><small>Budget</small><strong>{intent.budgetMax ? `₹${intent.budgetMax.toLocaleString("en-IN")}` : "Not specified"}</strong></div>
+              <div><small>Date</small><strong>{intent.dateQuery || "Not specified"}</strong></div>
+            </div>
+            {(intent.budgetMax !== null || intent.dateQuery) && <p className="notice">Budget and date are understood, but Google Places does not provide verified business pricing or appointment availability. We show that clearly rather than guessing.</p>}
+          </section>
+        )}
+
+        <section className="section-head"><div><span className="eyebrow">GOOGLE PLACES RESULTS</span><h2>{query ? `Results for “${query}”` : "Explore local businesses"}</h2></div><span className="count">{places.length ? `${places.length} businesses` : "AI ready"}</span></section>
+        {error && <div className="error">⚠ {error}<small>Check GOOGLE_MAPS_API_KEY, GEMINI_API_KEY, Places API (New), Gemini API access and billing.</small></div>}
+        {!loading && !error && !places.length && <div className="empty"><h3>Try asking naturally</h3><p>For example: “Find a wedding photographer under ₹20,000 near Proddatur.”</p></div>}
+
+        <div className="grid">
+          {places.map((p) => (
+            <article className="card" key={p.id}>
+              <div className="card-photo">{p.photos?.[0] ? <img src={`/api/photo?name=${encodeURIComponent(p.photos[0].name)}&width=800`} alt={`${p.name} Google photo`} /> : <div className="business-icon">⌂</div>}</div>
+              <h3>{p.name}</h3>
+              <p className="type">{pretty(p.type)} {p.openingHours?.openNow ? <span className="open">• Open now</span> : ""}</p>
+              <p className="address">⌖ {p.address}</p>
+              <div className="rating">★ <b>{p.rating ?? "—"}</b> <span>({p.reviewCount || 0} reviews)</span></div>
+              {p.matchReasons?.length ? <div className="match-list">{p.matchReasons.map((r) => <span key={r}>✓ {r}</span>)}</div> : null}
+              <div className="actions">{p.phone && <a href={`tel:${p.phone}`}>Call</a>}{p.mapsUrl && <a href={p.mapsUrl} target="_blank" rel="noreferrer">Directions</a>}<Link href={`/business/${encodeURIComponent(p.id)}`}>Details</Link></div>
+            </article>
+          ))}
+        </div>
+        {places.length > 0 && <div className="google-note">Business information and photos are provided by Google Places. Google attribution and Places terms apply.</div>}
+      </section>
+    </main>
+  );
+}
+
+function pretty(value: string | null) {
+  return value ? value.replaceAll("_", " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "Local business";
+}
