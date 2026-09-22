@@ -6,18 +6,24 @@ export function getGoogleApiKey() {
   return key;
 }
 
-export function placesFieldMask(fields: string[]) {
-  return fields.join(",");
-}
+export const SEARCH_FIELDS = [
+  "places.id","places.displayName","places.formattedAddress","places.location",
+  "places.primaryType","places.rating","places.userRatingCount","places.googleMapsUri",
+  "places.nationalPhoneNumber","places.websiteUri","places.currentOpeningHours","places.photos"
+].join(",");
+
+export const DETAIL_FIELDS = [
+  "id","displayName","formattedAddress","location","primaryType","types","rating",
+  "userRatingCount","nationalPhoneNumber","internationalPhoneNumber","websiteUri",
+  "googleMapsUri","currentOpeningHours","regularOpeningHours","photos","reviews"
+].join(",");
 
 export function normalizePlace(place: any) {
   return {
     id: place.id ?? "",
     name: place.displayName?.text ?? "",
     address: place.formattedAddress ?? "",
-    location: place.location
-      ? { latitude: place.location.latitude, longitude: place.location.longitude }
-      : null,
+    location: place.location ? { latitude: place.location.latitude, longitude: place.location.longitude } : null,
     type: place.primaryType ?? null,
     types: place.types ?? [],
     rating: place.rating ?? null,
@@ -28,7 +34,12 @@ export function normalizePlace(place: any) {
     mapsUrl: place.googleMapsUri ?? null,
     openingHours: place.currentOpeningHours ?? null,
     regularOpeningHours: place.regularOpeningHours ?? null,
-    photos: place.photos ?? [],
+    photos: (place.photos ?? []).map((p: any) => ({
+      name: p.name,
+      widthPx: p.widthPx,
+      heightPx: p.heightPx,
+      authorAttributions: p.authorAttributions ?? []
+    })),
     reviews: place.reviews ?? []
   };
 }
