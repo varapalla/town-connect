@@ -1,4 +1,6 @@
- "use client";
+"use client";
+
+import type { ReactNode } from "react";
 
 import { useState } from "react";
 
@@ -178,7 +180,7 @@ function Stat({label,value,change}:{label:string,value:string,change:string}) {
   return <div className="stat"><div className="stat-top"><span>{label}</span><span className="trend">{change}</span></div><strong>{value}</strong><div className="spark">↗</div></div>
 }
 
-function Card({title,action,children}:{title:string,action?:string,children:React.ReactNode}) {
+function Card({title,action,children}:{title:string,action?:string,children:ReactNode}) {
   return <section className="card"><div className="card-head"><h2>{title}</h2>{action && <button>{action} →</button>}</div>{children}</section>
 }
 

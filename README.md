@@ -1,6 +1,6 @@
 # TownConnect
 
-AI-powered local business discovery for small towns.
+AI-powered local business discovery dashboard for small towns.
 
 ## Run locally
 
@@ -11,13 +11,15 @@ npm run dev
 
 Open http://localhost:3000
 
-## Deploy to Vercel
+## Production build
 
-1. Create a new GitHub repository.
-2. Upload this project.
-3. Import the repository in Vercel.
-4. Framework: Next.js
-5. Build command: `next build`
-6. Deploy.
+```bash
+npm run build
+npm start
+```
 
-This first version is frontend-only with realistic mock data. Replace the mock data and the Ask the Town action with your API/MCP backend when ready.
+## Vercel
+
+Import this repository into Vercel. The framework will be detected as Next.js automatically.
+
+This MVP is frontend-only and uses mock data. The next phase can connect PostgreSQL/PostGIS, the TownConnect MCP server, AI search, maps, WhatsApp, leads and bookings.
