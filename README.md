@@ -85,3 +85,17 @@ Flow:
 6. If no menu is detected, TownConnect explicitly says the menu photo was not found and provides the Google Maps link.
 
 The app does not persist Google photo binaries. Photo resources are fetched at runtime.
+
+## Visual Menu Intelligence
+
+TownConnect supports queries such as:
+
+```text
+get manasa restaurant menu proddatur
+```
+
+The AI parser identifies `find_menu`, extracts the business and town, searches Google Places, retrieves the restaurant's available Google photo resources at request time, and sends each candidate image to Gemini image understanding. A photo is accepted as a menu when it contains menu/price-list content, even if the word `MENU` is not visible.
+
+Detected menu images are displayed with extracted item names/prices and a clear note that the information came from a Google Places photo and may be outdated. Google photo author attributions are displayed when returned. Photo resources are fetched at runtime and are not persisted by TownConnect.
+
+The implementation checks up to 10 photos sequentially to reduce burst traffic.

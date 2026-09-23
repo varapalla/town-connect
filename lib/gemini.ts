@@ -191,7 +191,10 @@ User request: ${message}`;
   return localFallback(message);
 }
 
-export async function analyzeMenuImage(imageBuffer: Buffer, mimeType: string): Promise<MenuAnalysis> {
+export async function analyzeMenuImage(
+  imageBuffer: Buffer,
+  mimeType: string,
+): Promise<MenuAnalysis> {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error("GEMINI_API_KEY is not configured");
 
@@ -217,39 +220,104 @@ export async function analyzeMenuImage(imageBuffer: Buffer, mimeType: string): P
     required: ["isMenu", "confidence", "menuText", "items"],
   };
 
-  const prompt = `Analyze this Google Places photo for TownConnect.
-Determine whether it contains a restaurant menu, food menu, price list, menu board, or restaurant item pricing.
-Rules:
-- Only return isMenu=true when visible menu or price information exists.
-- Do not invent missing prices or text.
-- Preserve visible prices as shown.
-- If text is unreadable, do not guess.
-- Extract visible menu items when possible.
-- If it is not a menu, return isMenu=false.`;
+  const prompt = `
+You are TownConnect's visual menu detector and OCR extractor.
+
+Carefully inspect the entire supplied restaurant photo.
+
+CLASSIFY THE IMAGE:
+- Return isMenu=true if the image contains a restaurant menu page, menu booklet,
+  menu board, food price list, or a list of food/drink items with prices.
+- The image does NOT need to contain the word "MENU".
+- The restaurant name does NOT need to be visible.
+- A photographed page with food names and prices IS a menu.
+- A photo containing only prepared food, restaurant interiors, signs, or people is NOT a menu.
+
+VERY IMPORTANT:
+Do not require a special layout. Menu pages may have decorative backgrounds,
+logos, photographs, columns, or partial pages.
+
+OCR RULES:
+- Read all clearly visible menu text.
+- Extract as many menu items as can be read reliably.
+- Preserve the visible spelling.
+- Preserve the visible price format, e.g. "150/-", "₹150", "150", etc.
+- Do not invent or infer a price that cannot be read.
+- If an item is readable but its price is not readable, set price to "".
+- Use the visible section heading as category when available, such as "VEG-STARTERS".
+- Do not invent categories.
+- menuText should contain the clearly visible menu text in reading order.
+
+EXAMPLE:
+If the image shows:
+VEG-STARTERS
+CHILLI GOBI 150/-
+GOBI MANCHURIA 150/-
+PANEER-65 250/-
+then this must be classified as a menu and those items should be extracted.
+
+Return only the requested JSON structure.
+`;
+
+  const base64 = imageBuffer.toString("base64");
 
   for (const model of getModels()) {
-    try {
-      const response = await callGemini(model, key, prompt, schema, [
-        { text: prompt },
-        { inlineData: { mimeType, data: imageBuffer.toString("base64") } },
-      ]);
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const response = await callGemini(model, key, prompt, schema, [
+          { text: prompt },
+          {
+            inlineData: {
+              mimeType,
+              data: base64,
+            },
+          },
+        ]);
 
-      if (!response.ok) continue;
-      const data = await response.json();
-      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!text) continue;
+        if (response.ok) {
+          const data = await response.json();
+          const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
 
-      const parsed = JSON.parse(text) as MenuAnalysis;
-      return {
-        isMenu: Boolean(parsed.isMenu),
-        confidence: typeof parsed.confidence === "number" ? parsed.confidence : 0,
-        menuText: parsed.menuText || "",
-        items: Array.isArray(parsed.items) ? parsed.items : [],
-      };
-    } catch (error) {
-      console.warn(`Menu image analysis failed with ${model}`, error);
+          if (text) {
+            const parsed = JSON.parse(text) as MenuAnalysis;
+            return {
+              isMenu: Boolean(parsed.isMenu),
+              confidence:
+                typeof parsed.confidence === "number"
+                  ? Math.max(0, Math.min(1, parsed.confidence))
+                  : 0,
+              menuText: parsed.menuText || "",
+              items: Array.isArray(parsed.items)
+                ? parsed.items
+                    .filter((item) => item && typeof item.name === "string")
+                    .map((item) => ({
+                      name: item.name.trim(),
+                      price: typeof item.price === "string" ? item.price.trim() : "",
+                      category:
+                        typeof item.category === "string"
+                          ? item.category.trim()
+                          : "",
+                    }))
+                : [],
+            };
+          }
+        }
+
+        if (response.status !== 503 && response.status !== 429) break;
+      } catch (error) {
+        console.warn(`Menu image analysis failed with ${model}`, error);
+      }
+
+      if (attempt < 2) {
+        await new Promise((resolve) => setTimeout(resolve, 700 * attempt));
+      }
     }
   }
 
-  return { isMenu: false, confidence: 0, menuText: "", items: [] };
+  return {
+    isMenu: false,
+    confidence: 0,
+    menuText: "",
+    items: [],
+  };
 }

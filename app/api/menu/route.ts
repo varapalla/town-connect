@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
       try {
         const image = await getGooglePhoto(photo.name);
         const analysis = await analyzeMenuImage(image.buffer, image.contentType);
-        if (analysis.isMenu && analysis.confidence >= 0.65) {
+        if (analysis.isMenu && analysis.confidence >= 0.50) {
           menus.push({
             photoName: photo.name,
             photoUrl: `/api/photo?name=${encodeURIComponent(photo.name)}&width=1400`,
