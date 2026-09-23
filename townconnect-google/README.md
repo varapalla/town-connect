@@ -71,3 +71,17 @@ Content-Type: application/json
 ```
 
 The response contains the parsed intent and real Google Places results. Budget and appointment availability are not claimed as verified because Google Places does not provide those facts for ordinary business discovery in this implementation.
+
+## Menu photo intelligence
+
+TownConnect now recognizes menu requests such as `get manasa restaurant menu proddatur`.
+
+Flow:
+1. Gemini extracts `find_menu`, business name, and location.
+2. Google Places finds the matching business and its current photo resources.
+3. TownConnect fetches up to 10 available Google Places photos sequentially.
+4. Gemini image understanding classifies menu photos and extracts visible menu text/items.
+5. The UI displays the detected menu photo, extracted items, confidence, attribution, and a disclaimer that prices may be outdated.
+6. If no menu is detected, TownConnect explicitly says the menu photo was not found and provides the Google Maps link.
+
+The app does not persist Google photo binaries. Photo resources are fetched at runtime.

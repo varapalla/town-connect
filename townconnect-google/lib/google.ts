@@ -109,3 +109,16 @@ export async function searchGooglePlaces(args: {
   const data = await response.json();
   return (data.places ?? []).map(normalizePlace);
 }
+
+export async function getGooglePhoto(photoName: string) {
+  if (!photoName.startsWith("places/")) throw new Error("Invalid Google photo resource");
+  const url = `${GOOGLE_PLACES_BASE}/${photoName}/media?maxWidthPx=1600&key=${encodeURIComponent(getGoogleApiKey())}`;
+  const response = await fetch(url, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error(`Google photo fetch failed (${response.status}): ${await response.text()}`);
+  }
+  return {
+    buffer: Buffer.from(await response.arrayBuffer()),
+    contentType: response.headers.get("content-type") ?? "image/jpeg",
+  };
+}

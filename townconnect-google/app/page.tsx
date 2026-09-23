@@ -19,9 +19,18 @@ type Place = {
   openingHours?: { openNow?: boolean } | null;
   matchReasons?: string[];
 };
+type MenuItem = { name: string; price: string; category: string };
+type MenuResult = {
+  found: boolean;
+  message: string;
+  business?: { id: string; name: string; address: string; mapsUrl: string | null; rating: number | null; reviewCount: number };
+  menus: { photoUrl: string; confidence: number; menuText: string; items: MenuItem[]; authorAttributions: any[] }[];
+};
+
 type Intent = {
   intent: string;
   category: string;
+  businessName: string | null;
   locationQuery: string;
   budgetMax: number | null;
   currency: string;
@@ -41,6 +50,7 @@ const suggestions = [
 export default function Home() {
   const [query, setQuery] = useState("");
   const [places, setPlaces] = useState<Place[]>([]);
+  const [menu, setMenu] = useState<MenuResult | null>(null);
   const [intent, setIntent] = useState<Intent | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -70,9 +80,11 @@ export default function Home() {
       if (!response.ok) throw new Error(data.error || "AI search failed");
       setIntent(data.intent);
       setPlaces(data.places || []);
+      setMenu(data.menu || null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "AI search failed");
       setPlaces([]);
+      setMenu(null);
       setIntent(null);
     } finally {
       setLoading(false);
@@ -128,6 +140,46 @@ export default function Home() {
               <div><small>Date</small><strong>{intent.dateQuery || "Not specified"}</strong></div>
             </div>
             {(intent.budgetMax !== null || intent.dateQuery) && <p className="notice">Budget and date are understood, but Google Places does not provide verified business pricing or appointment availability. We show that clearly rather than guessing.</p>}
+          </section>
+        )}
+
+        {menu && intent?.intent === "find_menu" && (
+          <section className="menu-result">
+            <div className="section-head menu-head">
+              <div><span className="eyebrow">MENU INTELLIGENCE</span><h2>{menu.business?.name || intent.businessName}</h2></div>
+              {menu.found && <span className="menu-found">🍽 MENU FOUND</span>}
+            </div>
+
+            {!menu.found && (
+              <div className="menu-not-found">
+                <h3>Menu photo not found in Google Places</h3>
+                <p>TownConnect checked the restaurant's available Google Places photos but couldn't identify a menu.</p>
+                {menu.business?.mapsUrl && <a href={menu.business.mapsUrl} target="_blank" rel="noreferrer">View restaurant on Google Maps →</a>}
+              </div>
+            )}
+
+            {menu.found && menu.menus.map((detectedMenu, index) => (
+              <div className="menu-card" key={`${detectedMenu.photoUrl}-${index}`}>
+                <div className="menu-image"><img src={detectedMenu.photoUrl} alt="Restaurant menu found in Google Places" /></div>
+                <div className="menu-content">
+                  <div className="menu-badge">MENU DETECTED</div>
+                  <p className="menu-confidence">Visual confidence: {Math.round(detectedMenu.confidence * 100)}%</p>
+                  {detectedMenu.items?.length > 0 ? (
+                    <div className="menu-items">
+                      {detectedMenu.items.map((item, itemIndex) => (
+                        <div className="menu-item" key={`${item.name}-${itemIndex}`}>
+                          <div><strong>{item.name}</strong>{item.category && <small>{item.category}</small>}</div>
+                          {item.price && <strong>{item.price}</strong>}
+                        </div>
+                      ))}
+                    </div>
+                  ) : <pre className="menu-text">{detectedMenu.menuText}</pre>}
+                  <p className="menu-disclaimer">Menu detected from a Google Places photo. Prices and availability may be outdated and are not independently verified by TownConnect.</p>
+                  {detectedMenu.authorAttributions?.length > 0 && <p className="photo-attribution">Photo attribution: {detectedMenu.authorAttributions.map((a: any, i: number) => <span key={i}>{a.displayName || a.uri || "Google contributor"}{i < detectedMenu.authorAttributions.length - 1 ? ", " : ""}</span>)}</p>}
+                  {menu.business?.mapsUrl && <a href={menu.business.mapsUrl} target="_blank" rel="noreferrer" className="menu-map-link">View restaurant on Google Maps →</a>}
+                </div>
+              </div>
+            ))}
           </section>
         )}
 

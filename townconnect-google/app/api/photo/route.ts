@@ -10,6 +10,6 @@ export async function GET(request: NextRequest) {
     const response = await fetch(photoUrl, { cache: "no-store" });
     if (!response.ok) return new Response(await response.text(), { status: response.status });
     const contentType = response.headers.get("content-type") ?? "image/jpeg";
-    return new Response(await response.arrayBuffer(), { headers: { "Content-Type": contentType, "Cache-Control": "public, max-age=3600" } });
+    return new Response(await response.arrayBuffer(), { headers: { "Content-Type": contentType, "Cache-Control": "no-store" } });
   } catch (error) { return new Response(error instanceof Error ? error.message : "Photo fetch failed", { status: 500 }); }
 }
